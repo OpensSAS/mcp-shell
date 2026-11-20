@@ -1,0 +1,21 @@
+#!/sbin/openrc-run
+# /etc/init.d/mcp-shell
+
+name="mcp-shell"
+description="Serveur MCP d'exécution shell sous liste blanche"
+command="/usr/local/bin/mcp-shell"
+command_args="serve -c /etc/mcp-shell/config.toml"
+command_user="mcp-shell:mcp-shell"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/mcp-shell/service.log"
+error_log="/var/log/mcp-shell/service.log"
+
+depend() {
+    need net
+    after firewall
+}
+
+start_pre() {
+    checkpath --directory --owner mcp-shell:mcp-shell --mode 0750 /var/log/mcp-shell
+}

@@ -1,0 +1,73 @@
+# /etc/mcp-shell/config.toml — propriétaire root, mode 640, groupe mcp-shell
+
+listen = "0.0.0.0:8443"
+server_name = "pve-opens"                 # nom annoncé à l'agent
+
+# En-tête Host accepté (nom utilisé par le client). Vide = pas de contrôle.
+allowed_hosts = ["mcp-pve.exemple.fr", "mcp-pve.exemple.fr:8443"]
+
+# IP autorisées. Vide = toutes. Ici : le VPS Paperclip + le LAN.
+allowed_ips = ["76.13.41.227/32", "192.168.1.0/24"]
+
+audit_log = "/var/log/mcp-shell/audit.jsonl"
+
+# Sans [tls], le serveur refuse de démarrer, sauf allow_plain_http = true
+# (uniquement s'il écoute en 127.0.0.1 derrière un reverse proxy local).
+# allow_plain_http = true
+
+[tls]
+cert = "/etc/mcp-shell/fullchain.pem"
+key  = "/etc/mcp-shell/privkey.pem"
+reload_interval_secs = 3600            # recharge le certificat s'il a changé
+
+# Un bloc par client, généré par : mcp-shell gen-token
+[[tokens]]
+name = "paperclip"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[exec]
+shell = "/bin/bash"
+workdir = "/"
+default_timeout_secs = 60
+max_timeout_secs = 600
+max_output_bytes = 65536
+allow_redirections = false
+
+# Correspondance COMPLÈTE (ancrage ^...$ ajouté automatiquement), segment par segment.
+# Phase 1 : lecture seule.
+# Les outils Proxmox (pct, qm, pvesm, zpool, zfs, smartctl) exigent root :
+# ils passent par sudo -n avec des chemins absolus, déclarés un par un dans
+# /etc/sudoers.d/mcp-shell. Les autres tournent sous l'utilisateur mcp-shell.
+allow = [
+  'hostname',
+  'uptime',
+  'df -h( \S+)?',
+  'free -h',
+  'pveversion( -v)?',
+  'apt list --upgradable',
+  'systemctl --failed --no-pager',
+  'systemctl status [\w.@-]+ --no-pager',
+  'journalctl -u [\w.@-]+ -n \d+ --no-pager',
+  'sudo -n /usr/sbin/pct list',
+  'sudo -n /usr/sbin/pct config \d+',
+  'sudo -n /usr/sbin/qm list',
+  'sudo -n /usr/sbin/qm config \d+',
+  'sudo -n /usr/sbin/pvesm status',
+  'sudo -n /usr/sbin/zpool status( -x)?',
+  'sudo -n /usr/sbin/zpool list',
+  'sudo -n /usr/sbin/zfs list( -t snapshot)?',
+  'sudo -n /usr/sbin/smartctl -H /dev/(sd[a-z]|nvme\dn\d)',
+  # filtres utilisables après un |
+  'grep( -[iEv]+)? [\w.\-]+',
+  'tail -n \d+',
+  'head -n \d+',
+  'wc -l',
+  'sort( -[rnu]+)?',
+]
+
+# Recherche partielle sur la commande entière, prioritaire sur allow.
+deny = [
+  '\brm\b', '\bdd\b', '\bmkfs', '\bshutdown\b', '\breboot\b', '\bpoweroff\b',
+  '\bchmod\b', '\bchown\b', '\bcurl\b', '\bwget\b', '\bnc\b', '\bbash\b', '\bsh\b',
+  '\beval\b', '\bxargs\b', '\bpython', '\bperl\b',
+]

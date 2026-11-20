@@ -1,0 +1,10 @@
+# /etc/sudoers.d/mcp-shell — mode 0440
+# Vérifier avant usage : visudo -cf /etc/sudoers.d/mcp-shell
+# Une entrée par commande, arguments figés ou motifs étroits. Doit refléter [exec].allow.
+Cmnd_Alias MCP_READ = /usr/sbin/pct list, /usr/sbin/pct config [0-9]*, \
+                      /usr/sbin/qm list, /usr/sbin/qm config [0-9]*, \
+                      /usr/sbin/pvesm status, \
+                      /usr/sbin/zpool status, /usr/sbin/zpool status -x, /usr/sbin/zpool list, \
+                      /usr/sbin/zfs list, /usr/sbin/zfs list -t snapshot, \
+                      /usr/sbin/smartctl -H /dev/sd[a-z], /usr/sbin/smartctl -H /dev/nvme[0-9]n[0-9]
+mcp-shell ALL=(root) NOPASSWD: MCP_READ
