@@ -110,6 +110,10 @@ impl Config {
             if !ok {
                 bail!("jeton '{}' : sha256 doit faire 64 caractères hexadécimaux", t.name);
             }
+            if t.sha256.chars().all(|c| c == '0') {
+                bail!("jeton '{}' : l'empreinte vaut encore 000…0 (valeur d'exemple). \
+                       Lancez `mcp-shell gen-token` et collez la valeur sha256 affichée", t.name);
+            }
         }
         if !self.exec.allow_all && self.exec.allow.is_empty() {
             bail!("[exec].allow est vide : aucune commande ne serait autorisée \
