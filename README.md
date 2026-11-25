@@ -23,7 +23,7 @@ L'agent ne détient ni clé SSH ni mot de passe : seulement l'URL et un jeton. I
 | Outil | Rôle |
 |---|---|
 | `get_policy` | Renvoie le nom du serveur, les regex autorisées et interdites, les limites. L'agent l'appelle avant d'agir. |
-| `run_command` | Exécute une commande. Paramètres : `command`, `workdir` (optionnel, absolu), `timeout_secs` (optionnel). Renvoie `exit_code`, `stdout`, `stderr`, `truncated`, `timed_out`, `duration_ms`. Une commande refusée renvoie une erreur d'outil avec la raison. |
+| `run_command` | Exécute une commande (déclarée en écriture et destructive dans les annotations MCP : les clients peuvent exiger une approbation). Paramètres : `command`, `workdir` (optionnel, absolu), `timeout_secs` (optionnel). Renvoie `exit_code`, `stdout`, `stderr`, `truncated`, `timed_out`, `duration_ms`. Une commande refusée renvoie une erreur d'outil avec la raison. |
 
 ### Règles de filtrage
 
@@ -124,7 +124,7 @@ chmod 0755 /etc/cron.daily/mcp-shell-cert && /etc/cron.daily/mcp-shell-cert
 mcp-shell gen-token
 ```
 
-La commande affiche le jeton (à donner au client, il n'est stocké nulle part) et le bloc à ajouter :
+La commande **n'écrit rien** : elle affiche le jeton (à donner au client, il n'est stocké nulle part) et le bloc à recopier dans la configuration, à la place de l'exemple. Le service refuse de démarrer tant qu'une empreinte vaut encore `000…0`.
 
 ```toml
 [[tokens]]
@@ -244,6 +244,7 @@ install -m 0755 /tmp/mcp-shell /usr/local/bin/mcp-shell && systemctl restart mcp
 | « chargement TLS » au démarrage | Chemin faux ou fichiers illisibles par `mcp-shell` | `sudo -u mcp-shell cat /etc/mcp-shell/privkey.pem >/dev/null` |
 | Client : 403 | IP hors `allowed_ips` | Vérifier l'IP vue dans `journalctl -u mcp-shell` |
 | Client : 401 | Jeton faux, ou en-tête sans `Bearer ` | Regénérer un jeton, vérifier `claude mcp list` |
+| « l'empreinte vaut encore 000…0 » au démarrage | Empreinte d'exemple non remplacée | `mcp-shell gen-token`, coller la valeur `sha256` dans `[[tokens]]` |
 | Client : erreur sur l'en-tête Host | Nom utilisé absent de `allowed_hosts` | Ajouter le nom, avec et sans port |
 | Client : erreur de certificat | Certificat auto-signé ou nom différent | Certificat Let's Encrypt au bon nom |
 | `sudo: a password is required` | Commande absente de sudoers ou arguments différents | Aligner `/etc/sudoers.d/mcp-shell` sur `allow`, `visudo -cf` |
