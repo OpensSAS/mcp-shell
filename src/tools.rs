@@ -69,6 +69,7 @@ fn client_of(parts: &Parts) -> (String, String) {
 impl ShellServer {
     #[tool(
         name = "run_command",
+        annotations(title = "Exécuter une commande", read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false),
         description = "Exécute une commande shell sur ce serveur et renvoie stdout, stderr et le code de retour. \
                        Seules les commandes de la liste blanche sont acceptées : appelez get_policy pour la connaître. \
                        Chaque segment séparé par | ; && || doit être autorisé ; $(...), backticks et redirections sont refusés."
@@ -135,6 +136,7 @@ impl ShellServer {
 
     #[tool(
         name = "get_policy",
+        annotations(title = "Politique d'exécution", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
         description = "Renvoie le nom du serveur et la politique d'exécution : commandes autorisées (regex), \
                        motifs interdits, limites de temps et de taille de sortie. À appeler avant run_command."
     )]
