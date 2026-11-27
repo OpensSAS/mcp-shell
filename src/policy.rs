@@ -4,7 +4,9 @@
 //! 1. la liste noire (`deny`) est testée sur la commande entière : un motif trouvé = refus ;
 //! 2. hors `allow_all`, les substitutions `$(...)`, `` `...` ``, `<(...)`, `>(...)` sont refusées ;
 //! 3. hors `allow_redirections`, les redirections `>` et `<` sont refusées ;
-//! 4. la commande est découpée sur `;` `&&` `||` `|` `&` et retour ligne :
+//! 4. la mise en arrière-plan (`&` seul) est refusée : un processus détaché
+//!    survivrait à la requête et échapperait au timeout ;
+//! 5. la commande est découpée sur `;` `&&` `||` `|` `|&` et retour ligne :
 //!    CHAQUE segment doit correspondre entièrement à un motif de `allow`.
 //!
 //! Le découpage est volontairement naïf (il ignore les guillemets) : il ne peut que
@@ -73,7 +75,7 @@ impl Policy {
         if !self.allow_redirections && (command.contains('>') || command.contains('<')) {
             return Err("redirections > < interdites (allow_redirections = false)".into());
         }
-        for segment in split_segments(command) {
+        for segment in split_segments(command)? {
             let seg = segment.trim();
             if seg.is_empty() {
                 continue;
@@ -88,9 +90,11 @@ impl Policy {
     }
 }
 
-/// Découpe sur ; && || | & et retour ligne. Un `&` précédé de `>`/`<` ou suivi de `>`
-/// (ex. `2>&1`, `&>`) n'est pas un séparateur.
-fn split_segments(cmd: &str) -> Vec<String> {
+/// Découpe sur `;` `&&` `||` `|` `|&` et retour ligne.
+///
+/// Un `&` qui fait partie d'une redirection (`2>&1`, `<&`, `&>`, `&>>`) n'est pas un
+/// séparateur. Tout autre `&` seul est une mise en arrière-plan : refusée.
+fn split_segments(cmd: &str) -> std::result::Result<Vec<String>, String> {
     let chars: Vec<char> = cmd.chars().collect();
     let mut out = Vec::new();
     let mut cur = String::new();
@@ -99,24 +103,27 @@ fn split_segments(cmd: &str) -> Vec<String> {
         let c = chars[i];
         let next = chars.get(i + 1).copied();
         let prev = if i > 0 { Some(chars[i - 1]) } else { None };
-        let is_sep = match c {
-            ';' | '\n' | '\r' | '|' => true,
-            '&' => !matches!(prev, Some('>') | Some('<')) && next != Some('>'),
-            _ => false,
-        };
-        if is_sep {
-            out.push(std::mem::take(&mut cur));
-            // avaler le second caractère de && et ||
-            if (c == '&' || c == '|') && next == Some(c) {
+        match c {
+            ';' | '\n' | '\r' => out.push(std::mem::take(&mut cur)),
+            '|' => {
+                out.push(std::mem::take(&mut cur));
+                // `||` (ou logique) et `|&` (tube stdout + stderr)
+                if matches!(next, Some('|') | Some('&')) {
+                    i += 1;
+                }
+            }
+            '&' if next == Some('&') => {
+                out.push(std::mem::take(&mut cur));
                 i += 1;
             }
-        } else {
-            cur.push(c);
+            '&' if matches!(prev, Some('>') | Some('<')) || next == Some('>') => cur.push(c),
+            '&' => return Err("mise en arrière-plan `&` interdite".into()),
+            _ => cur.push(c),
         }
         i += 1;
     }
     out.push(cur);
-    out
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -125,16 +132,10 @@ mod tests {
 
     fn policy(allow: &[&str], deny: &[&str], redirections: bool) -> Policy {
         let cfg = ExecConfig {
-            shell: "/bin/sh".into(),
-            workdir: "/".into(),
-            path: String::new(),
-            default_timeout_secs: 10,
-            max_timeout_secs: 10,
-            max_output_bytes: 1024,
-            allow_all: false,
             allow_redirections: redirections,
             allow: allow.iter().map(|s| s.to_string()).collect(),
             deny: deny.iter().map(|s| s.to_string()).collect(),
+            ..ExecConfig::for_tests()
         };
         Policy::new(&cfg).unwrap()
     }
@@ -171,5 +172,35 @@ mod tests {
         let p = policy(&[r".*"], &[r"\brm\b"], false);
         assert!(p.check("rm -rf /").is_err());
         assert!(p.check("ls").is_ok());
+    }
+
+    #[test]
+    fn background_refused() {
+        let p = policy(&[r"sleep \d+", r"hostname"], &[], false);
+        assert!(p.check("sleep 3600 &").is_err());
+        assert!(p.check("sleep 3600 & hostname").is_err());
+        assert!(p.check("sleep 1 && hostname").is_ok());
+        assert!(p.check("sleep 1 || hostname").is_ok());
+    }
+
+    #[test]
+    fn redirection_ampersands_are_not_separators() {
+        let p = policy(&[r"journalctl -u \w+( 2>&1)?", r"grep \w+"], &[], true);
+        assert!(p.check("journalctl -u pveproxy 2>&1 | grep error").is_ok());
+        assert!(p.check("journalctl -u pveproxy |& grep error").is_ok());
+        assert_eq!(
+            split_segments("a 2>&1 |& b && c || d; e").unwrap(),
+            vec!["a 2>&1 ", " b ", " c ", " d", " e"]
+        );
+        assert!(split_segments("a &> f").is_ok());
+        assert!(split_segments("a & b").is_err());
+    }
+
+    #[test]
+    fn newlines_split() {
+        let p = policy(&[r"hostname"], &[], false);
+        assert!(p.check("hostname\nhostname").is_ok());
+        assert!(p.check("hostname\nreboot").is_err());
+        assert!(p.check("hostname\r\nreboot").is_err());
     }
 }

@@ -72,8 +72,7 @@ pub async fn middleware(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(str::trim);
+        .and_then(bearer_token);
 
     let Some(name) = presented.and_then(|t| state.identify(t)) else {
         tracing::warn!(%ip, "authentification refusée");
@@ -101,4 +100,39 @@ pub fn generate_token() -> anyhow::Result<(String, String)> {
     let token = hex::encode(raw);
     let hash = hex::encode(Sha256::digest(token.as_bytes()));
     Ok((token, hash))
+}
+
+/// Extrait le jeton d'un en-tête `Authorization: Bearer <jeton>`
+/// (schéma insensible à la casse, RFC 9110 §11.1).
+fn bearer_token(header: &str) -> Option<&str> {
+    let (scheme, token) = header.trim().split_once(' ')?;
+    let token = token.trim();
+    (scheme.eq_ignore_ascii_case("bearer") && !token.is_empty()).then_some(token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::TokenConfig;
+
+    #[test]
+    fn bearer_parsing() {
+        assert_eq!(bearer_token("Bearer abc"), Some("abc"));
+        assert_eq!(bearer_token("bearer  abc "), Some("abc"));
+        assert_eq!(bearer_token("Basic abc"), None);
+        assert_eq!(bearer_token("Bearer "), None);
+        assert_eq!(bearer_token("Bearerabc"), None);
+    }
+
+    #[test]
+    fn generated_token_is_identified() {
+        let (token, hash) = generate_token().unwrap();
+        let cfg = [TokenConfig {
+            name: "client".into(),
+            sha256: hash,
+        }];
+        let state = AuthState::new(&cfg, Vec::new()).unwrap();
+        assert_eq!(state.identify(&token), Some("client"));
+        assert_eq!(state.identify("mauvais"), None);
+    }
 }

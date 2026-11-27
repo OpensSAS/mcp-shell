@@ -91,7 +91,7 @@ impl ShellServer {
         ),
         description = "Exécute une commande shell sur ce serveur et renvoie stdout, stderr et le code de retour. \
                        Seules les commandes de la liste blanche sont acceptées : appelez get_policy pour la connaître. \
-                       Chaque segment séparé par | ; && || doit être autorisé ; $(...), backticks et redirections sont refusés."
+                       Chaque segment séparé par | ; && || doit être autorisé ; $(...), backticks, mise en arrière-plan (&) et redirections sont refusés."
     )]
     async fn run_command(
         &self,
@@ -209,7 +209,8 @@ impl ShellServer {
             max_output_bytes: s.exec.max_output_bytes,
             rules: "Chaque segment (séparé par | ; && || & ou retour ligne) doit correspondre entièrement \
                     à une regex de 'allow'. Les motifs 'deny' sont testés sur la commande entière et priment. \
-                    $(...), backticks, <(...) et >(...) sont toujours refusés."
+                    $(...), backticks, <(...), >(...) et la mise en arrière-plan (&) sont toujours refusés. \
+                    Le timeout couvre toute l'exécution : tout processus restant est tué à la fin."
                 .into(),
         })
     }

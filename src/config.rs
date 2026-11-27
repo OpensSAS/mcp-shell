@@ -167,3 +167,22 @@ fn check_permissions(path: &Path) {
         }
     }
 }
+
+#[cfg(test)]
+impl ExecConfig {
+    /// Configuration minimale pour les tests unitaires.
+    pub fn for_tests() -> Self {
+        Self {
+            shell: "/bin/sh".into(),
+            workdir: "/".into(),
+            path: default_path(),
+            default_timeout_secs: 10,
+            max_timeout_secs: 10,
+            max_output_bytes: 1024,
+            allow_all: false,
+            allow_redirections: false,
+            allow: Vec::new(),
+            deny: Vec::new(),
+        }
+    }
+}
