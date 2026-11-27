@@ -20,6 +20,8 @@ Chaque version publiée correspond à un tag `vX.Y.Z` et à une Release GitHub c
 - `packaging/mcp-shell.logrotate`.
 - CI : shellcheck, et test d'installation de bout en bout dans des conteneurs Debian 12 et
   Alpine 3.20 (aussi exécuté avant chaque release).
+- Release lançable depuis l'onglet Actions (« Run workflow ») : le workflow crée lui-même
+  le tag d'après `Cargo.toml`.
 
 ## [0.1.2] - 2026-11-27
 

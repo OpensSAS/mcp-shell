@@ -339,12 +339,9 @@ scripts/package.sh
 
 ### Publier une version
 
-1. Dans une PR : passer `version` dans `Cargo.toml` (puis `cargo update -p mcp-shell --offline` pour `Cargo.lock`), dater la section du `CHANGELOG.md`.
-2. Après fusion dans `main` :
-   ```bash
-   git checkout main && git pull
-   git tag v0.1.2 && git push origin v0.1.2
-   ```
-3. Le workflow `release.yml` vérifie que le tag correspond à `Cargo.toml` et au CHANGELOG, teste, construit l'archive, publie la Release avec sha256 et attestation de provenance.
+1. Dans une PR : passer `version` dans `Cargo.toml` (puis `cargo update -p mcp-shell --offline` pour `Cargo.lock`), dater la section du `CHANGELOG.md`. Fusionner.
+2. Onglet **Actions → Release → Run workflow** (branche `main`). Le workflow lit la version dans `Cargo.toml`, vérifie que le tag n'existe pas encore et que le CHANGELOG décrit la version, teste (Rust et installation Debian/Alpine), construit l'archive, puis crée **le tag et la Release** (sha256 + attestation de provenance).
+
+Pousser soi-même un tag `vX.Y.Z` déclenche le même workflow, si on préfère.
 
 Dépendances principales : `rmcp` (SDK MCP officiel), `axum`, `axum-server` + `rustls` (ring), `regex`, `sha2`, `subtle`.

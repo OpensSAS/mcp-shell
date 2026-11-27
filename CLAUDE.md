@@ -67,7 +67,10 @@ Toujours `--locked` : `Cargo.lock` est versionné et fait foi. Version minimale 
 ## Publier une version
 
 1. PR : `version` dans `Cargo.toml`, `cargo update -p mcp-shell --offline`, section datée dans
-   `CHANGELOG.md`.
-2. Après fusion : `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. `.github/workflows/release.yml` vérifie tag/Cargo.toml/CHANGELOG, teste, construit l'archive,
-   publie la Release (sha256 + attestation de provenance).
+   `CHANGELOG.md`. Fusion.
+2. Lancer `.github/workflows/release.yml` sur `main` (onglet Actions, ou
+   `gh api -X POST repos/openssas/mcp-shell/actions/workflows/release.yml/dispatches -f ref=main`).
+   Il crée le tag `vX.Y.Z` d'après `Cargo.toml` : inutile (et, depuis une session cloud,
+   impossible) de pousser le tag soi-même.
+3. Le workflow vérifie tag/CHANGELOG, teste, construit l'archive, publie la Release
+   (sha256 + attestation de provenance).
