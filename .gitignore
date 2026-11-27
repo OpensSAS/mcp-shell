@@ -1,3 +1,6 @@
 /target
 *.pem
 config.toml
+# Les binaires et archives sont publiés dans les Releases GitHub, pas dans git
+*.tar.gz
+/dist

@@ -3,7 +3,10 @@
 use anyhow::{bail, Context, Result};
 use ipnet::IpNet;
 use serde::Deserialize;
-use std::{net::SocketAddr, path::{Path, PathBuf}};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -78,20 +81,34 @@ pub struct ExecConfig {
     pub deny: Vec<String>,
 }
 
-fn default_reload() -> u64 { 3600 }
-fn default_shell() -> PathBuf { "/bin/sh".into() }
-fn default_workdir() -> PathBuf { "/".into() }
-fn default_path() -> String { "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".into() }
-fn default_timeout() -> u64 { 60 }
-fn default_max_timeout() -> u64 { 600 }
-fn default_max_output() -> usize { 64 * 1024 }
+fn default_reload() -> u64 {
+    3600
+}
+fn default_shell() -> PathBuf {
+    "/bin/sh".into()
+}
+fn default_workdir() -> PathBuf {
+    "/".into()
+}
+fn default_path() -> String {
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".into()
+}
+fn default_timeout() -> u64 {
+    60
+}
+fn default_max_timeout() -> u64 {
+    600
+}
+fn default_max_output() -> usize {
+    64 * 1024
+}
 
 impl Config {
     pub fn load(path: &Path) -> Result<Self> {
         let raw = std::fs::read_to_string(path)
             .with_context(|| format!("lecture de {}", path.display()))?;
-        let cfg: Config = toml::from_str(&raw)
-            .with_context(|| format!("analyse de {}", path.display()))?;
+        let cfg: Config =
+            toml::from_str(&raw).with_context(|| format!("analyse de {}", path.display()))?;
         cfg.validate()?;
         check_permissions(path);
         Ok(cfg)
@@ -99,8 +116,10 @@ impl Config {
 
     fn validate(&self) -> Result<()> {
         if self.tls.is_none() && !self.allow_plain_http {
-            bail!("pas de section [tls] : ajoutez-la, ou mettez allow_plain_http = true \
-                   (uniquement derrière un reverse proxy qui écoute en local)");
+            bail!(
+                "pas de section [tls] : ajoutez-la, ou mettez allow_plain_http = true \
+                   (uniquement derrière un reverse proxy qui écoute en local)"
+            );
         }
         if self.tokens.is_empty() {
             bail!("aucun jeton [[tokens]] défini : personne ne pourrait se connecter");
@@ -108,18 +127,28 @@ impl Config {
         for t in &self.tokens {
             let ok = t.sha256.len() == 64 && t.sha256.chars().all(|c| c.is_ascii_hexdigit());
             if !ok {
-                bail!("jeton '{}' : sha256 doit faire 64 caractères hexadécimaux", t.name);
+                bail!(
+                    "jeton '{}' : sha256 doit faire 64 caractères hexadécimaux",
+                    t.name
+                );
             }
             if t.sha256.chars().all(|c| c == '0') {
-                bail!("jeton '{}' : l'empreinte vaut encore 000…0 (valeur d'exemple). \
-                       Lancez `mcp-shell gen-token` et collez la valeur sha256 affichée", t.name);
+                bail!(
+                    "jeton '{}' : l'empreinte vaut encore 000…0 (valeur d'exemple). \
+                       Lancez `mcp-shell gen-token` et collez la valeur sha256 affichée",
+                    t.name
+                );
             }
         }
         if !self.exec.allow_all && self.exec.allow.is_empty() {
-            bail!("[exec].allow est vide : aucune commande ne serait autorisée \
-                   (ou allow_all = true, déconseillé)");
+            bail!(
+                "[exec].allow est vide : aucune commande ne serait autorisée \
+                   (ou allow_all = true, déconseillé)"
+            );
         }
-        if self.exec.default_timeout_secs == 0 || self.exec.default_timeout_secs > self.exec.max_timeout_secs {
+        if self.exec.default_timeout_secs == 0
+            || self.exec.default_timeout_secs > self.exec.max_timeout_secs
+        {
             bail!("[exec] : il faut 0 < default_timeout_secs <= max_timeout_secs");
         }
         if !self.exec.shell.is_absolute() || !self.exec.workdir.is_absolute() {
@@ -135,6 +164,25 @@ fn check_permissions(path: &Path) {
     if let Ok(meta) = std::fs::metadata(path) {
         if meta.permissions().mode() & 0o002 != 0 {
             tracing::warn!("{} est modifiable par tous : n'importe quel utilisateur pourrait élargir la liste blanche", path.display());
+        }
+    }
+}
+
+#[cfg(test)]
+impl ExecConfig {
+    /// Configuration minimale pour les tests unitaires.
+    pub fn for_tests() -> Self {
+        Self {
+            shell: "/bin/sh".into(),
+            workdir: "/".into(),
+            path: default_path(),
+            default_timeout_secs: 10,
+            max_timeout_secs: 10,
+            max_output_bytes: 1024,
+            allow_all: false,
+            allow_redirections: false,
+            allow: Vec::new(),
+            deny: Vec::new(),
         }
     }
 }

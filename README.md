@@ -34,7 +34,8 @@ Dans l'ordre :
 3. **Liste noire** (`deny`) : regex cherchées dans la commande entière. Un motif trouvé = refus, quoi que dise la liste blanche.
 4. **Substitutions** `$(…)`, `` `…` ``, `<(…)`, `>(…)` : toujours refusées.
 5. **Redirections** `>` `<` : refusées sauf `allow_redirections = true`.
-6. **Liste blanche** (`allow`) : la commande est découpée sur `|` `;` `&&` `||` `&` et retour ligne. **Chaque segment** doit correspondre **entièrement** à une regex (l'ancrage `^…$` est ajouté automatiquement).
+6. **Mise en arrière-plan** `&` : toujours refusée (`&&`, `|&`, `2>&1` restent possibles).
+7. **Liste blanche** (`allow`) : la commande est découpée sur `|` `|&` `;` `&&` `||` et retour ligne. **Chaque segment** doit correspondre **entièrement** à une regex (l'ancrage `^…$` est ajouté automatiquement).
 
 Exemple avec `allow = ['sudo -n /usr/sbin/pct list', 'grep -i \w+']` :
 
@@ -43,18 +44,34 @@ Exemple avec `allow = ['sudo -n /usr/sbin/pct list', 'grep -i \w+']` :
 | `sudo -n /usr/sbin/pct list \| grep -i running` | autorisée |
 | `sudo -n /usr/sbin/pct list; reboot` | refusée (`reboot`) |
 | `sudo -n /usr/sbin/pct list $(id)` | refusée (substitution) |
+| `sudo -n /usr/sbin/pct list &` | refusée (arrière-plan) |
 
 Le découpage ignore les guillemets : il ne peut que rendre la vérification plus stricte.
 
 ### Exécution
 
 - Shell lancé avec un environnement vidé (`PATH` fixé par la config, `LANG=C.UTF-8`), stdin fermé.
-- **Timeout** : tout le groupe de processus est tué (le shell et ses enfants).
+- **Timeout** : une échéance unique couvre l'exécution et la lecture de la sortie. À l'échéance, ou dès que le shell se termine, tout le groupe de processus est tué (le shell et ses enfants) : rien ne survit à la requête.
 - **Sortie** plafonnée à `max_output_bytes` par flux ; le reste est lu et jeté.
 
 ## 2. Installation
 
-Les commandes ci-dessous supposent le binaire copié dans `/tmp/mcp-shell`.
+### Récupérer et vérifier une version
+
+Les binaires sont publiés dans les [Releases GitHub](https://github.com/openssas/mcp-shell/releases), construits par la CI à partir du tag (binaire statique musl, Debian/Proxmox et Alpine).
+
+```bash
+V=0.1.2
+curl -fsSLO https://github.com/openssas/mcp-shell/releases/download/v$V/mcp-shell-$V-x86_64-linux.tar.gz
+curl -fsSLO https://github.com/openssas/mcp-shell/releases/download/v$V/mcp-shell-$V-x86_64-linux.tar.gz.sha256
+sha256sum -c mcp-shell-$V-x86_64-linux.tar.gz.sha256
+# Optionnel, depuis un poste avec gh : prouve que l'archive a été construite par la CI du dépôt
+gh attestation verify mcp-shell-$V-x86_64-linux.tar.gz -R openssas/mcp-shell
+tar xzf mcp-shell-$V-x86_64-linux.tar.gz && cd mcp-shell-$V
+cp bin/mcp-shell /tmp/mcp-shell && cp packaging/* .
+```
+
+Les commandes ci-dessous supposent le binaire copié dans `/tmp/mcp-shell` et les fichiers de `packaging/` dans le répertoire courant.
 
 ### 2.1 Sur un hôte Proxmox (Debian, systemd)
 
@@ -92,12 +109,12 @@ addgroup -S mcp-shell && adduser -S -D -H -h /var/lib/mcp-shell -s /sbin/nologin
 install -m 0755 /tmp/mcp-shell /usr/local/bin/mcp-shell
 install -d -m 0750 -g mcp-shell /etc/mcp-shell
 install -m 0640 -g mcp-shell config.example.toml /etc/mcp-shell/config.toml
-install -m 0440 sudoers.mcp-shell /etc/sudoers.d/mcp-shell   # adapter les chemins
+install -m 0440 sudoers.mcp-shell /etc/sudoers.d/mcp-shell   # adapter les chemins (sudo >= 1.9.10)
 install -m 0755 mcp-shell.openrc /etc/init.d/mcp-shell
 rc-update add mcp-shell default
 ```
 
-Le binaire est lié statiquement : il tourne tel quel sur Alpine (musl) comme sur Debian.
+Le binaire est lié statiquement (musl) : il tourne tel quel sur Alpine comme sur Debian.
 
 ## 3. Certificat TLS
 
@@ -149,6 +166,7 @@ mcp-shell check -c /etc/mcp-shell/config.toml --command "sudo -n /usr/sbin/pct l
 
 - Écrivez des regex **étroites** : `pct config \d+` plutôt que `pct .*`.
 - Les commandes root passent par `sudo -n /chemin/absolu` et doivent figurer **à l'identique** dans `/etc/sudoers.d/mcp-shell`. La liste blanche filtre ce que l'agent demande ; sudoers limite ce que le système accepte.
+- Dans sudoers, n'utilisez **pas** le joker `*` dans les arguments : il accepte aussi les espaces, donc des options en plus (`pct config [0-9]*` laisse passer `pct config 100 --current`). Utilisez une regex ancrée, équivalente à celle de `allow` : `/usr/sbin/pct ^config [0-9]+$` (sudo ≥ 1.9.10 : Debian 12 / Proxmox 8, Alpine 3.16+). Testez avec `sudo -l -U mcp-shell /usr/sbin/pct config 100`.
 - N'autorisez jamais un interpréteur ou un lanceur générique : `bash`, `sh`, `python`, `perl`, `eval`, `xargs`, `find -exec`, `pct exec`, `pct enter`, `qm guest exec`. Chacun contourne la liste blanche.
 - Gardez une liste noire de sécurité (`rm`, `dd`, `mkfs`, `reboot`, `curl`, `wget`…) même si la liste blanche ne les autorise pas : elle protège contre une regex trop large ajoutée plus tard.
 
@@ -161,7 +179,13 @@ Ajoutez une à une les commandes d'action, par exemple :
 'sudo -n /usr/sbin/pct start \d+',
 ```
 
-avec les entrées sudoers correspondantes. Côté Paperclip, exigez une approbation avant les tâches qui les utilisent.
+avec les entrées sudoers correspondantes, par exemple :
+
+```
+/usr/sbin/pct ^snapshot [0-9]+ agent-[0-9]{8}-[0-9]{4}$, /usr/sbin/pct ^start [0-9]+$
+```
+
+Côté Paperclip, exigez une approbation avant les tâches qui les utilisent.
 
 ## 6. Démarrage et branchement Paperclip
 
@@ -232,6 +256,8 @@ mcp-shell check -c /etc/mcp-shell/config.toml && systemctl restart mcp-shell
 
 ### Mettre à jour le binaire
 
+Lisez d'abord le [CHANGELOG](CHANGELOG.md) : certaines versions demandent d'adapter la configuration ou le fichier sudoers.
+
 ```bash
 install -m 0755 /tmp/mcp-shell /usr/local/bin/mcp-shell && systemctl restart mcp-shell
 ```
@@ -253,17 +279,39 @@ install -m 0755 /tmp/mcp-shell /usr/local/bin/mcp-shell && systemctl restart mcp
 | `truncated: true` | Sortie au-delà de `max_output_bytes` | Filtrer (`\| tail -n 50`) ou augmenter la limite |
 | Avertissement « le service tourne en root » | Service lancé sans `User=` | Toujours utiliser l'utilisateur `mcp-shell` |
 
-## 9. Compilation
+## 9. Développement
 
-Toolchain Rust ≥ 1.88.
+Toolchain Rust ≥ 1.89 (champ `rust-version` de `Cargo.toml`, vérifié par la CI).
 
 ```bash
-# Binaire statique (glibc), portable Debian/Proxmox et Alpine
-RUSTFLAGS="-C target-feature=+crt-static" \
-  cargo build --release --target x86_64-unknown-linux-gnu
-# → target/x86_64-unknown-linux-gnu/release/mcp-shell
-
-cargo test        # tests de la politique de filtrage
+cargo fmt --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked          # politique, exécution (timeout, arrière-plan…), jetons
 ```
+
+### Binaire de release en local
+
+```bash
+rustup target add x86_64-unknown-linux-musl
+sudo apt-get install musl-tools          # fournit musl-gcc (pour ring)
+scripts/package.sh
+# → dist/mcp-shell-<version>-x86_64-linux.tar.gz et son .sha256
+```
+
+### Contribuer
+
+- Une branche et une pull request par changement : la CI (`.github/workflows/ci.yml`) lance format, clippy, tests, vérification de la version minimale de Rust et build musl.
+- Ne committez ni binaire ni archive : ils sont produits par la CI.
+- Toute modification visible est notée dans [CHANGELOG.md](CHANGELOG.md), section de la prochaine version.
+
+### Publier une version
+
+1. Dans une PR : passer `version` dans `Cargo.toml` (puis `cargo update -p mcp-shell --offline` pour `Cargo.lock`), dater la section du `CHANGELOG.md`.
+2. Après fusion dans `main` :
+   ```bash
+   git checkout main && git pull
+   git tag v0.1.2 && git push origin v0.1.2
+   ```
+3. Le workflow `release.yml` vérifie que le tag correspond à `Cargo.toml` et au CHANGELOG, teste, construit l'archive, publie la Release avec sha256 et attestation de provenance.
 
 Dépendances principales : `rmcp` (SDK MCP officiel), `axum`, `axum-server` + `rustls` (ring), `regex`, `sha2`, `subtle`.

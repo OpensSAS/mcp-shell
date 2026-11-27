@@ -1,0 +1,64 @@
+name: Release
+
+# Publier une version : mettre à jour version dans Cargo.toml et CHANGELOG.md,
+# fusionner dans main, puis :
+#   git tag v0.1.2 && git push origin v0.1.2
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write      # créer la Release
+  id-token: write      # attestation de provenance
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Le tag doit correspondre à Cargo.toml
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, mais Cargo.toml indique $v"
+            exit 1
+          fi
+
+      - name: Le CHANGELOG doit décrire la version
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::aucune section ## [$v] dans CHANGELOG.md"
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - run: cargo test --locked --target x86_64-unknown-linux-musl
+      - run: scripts/package.sh
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.tar.gz
+
+      - name: Créer la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "mcp-shell ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            --verify-tag

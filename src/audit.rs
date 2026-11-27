@@ -27,7 +27,10 @@ pub struct AuditEvent<'a> {
 
 impl Audit {
     pub fn new(path: PathBuf) -> Self {
-        Self { path, lock: Mutex::new(()) }
+        Self {
+            path,
+            lock: Mutex::new(()),
+        }
     }
 
     pub async fn write(&self, ev: AuditEvent<'_>) {
@@ -40,13 +43,20 @@ impl Audit {
         };
         let _guard = self.lock.lock().await;
         let res = async {
-            let mut f = OpenOptions::new().create(true).append(true).open(&self.path).await?;
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)
+                .await?;
             f.write_all(line.as_bytes()).await
         }
         .await;
         if let Err(e) = res {
             // L'échec d'audit est journalisé mais ne bloque pas le service.
-            tracing::error!("audit : écriture dans {} impossible : {e}", self.path.display());
+            tracing::error!(
+                "audit : écriture dans {} impossible : {e}",
+                self.path.display()
+            );
         }
     }
 }

@@ -1,8 +1,11 @@
 [package]
 name = "mcp-shell"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Serveur MCP (HTTP streamable + TLS) exposant l'exécution de commandes shell sous liste blanche"
+rust-version = "1.89"
+repository = "https://github.com/openssas/mcp-shell"
+readme = "README.md"
 license = "MIT"
 
 [dependencies]
