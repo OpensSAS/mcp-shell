@@ -3,6 +3,24 @@
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [SemVer](https://semver.org/lang/fr/).
 Chaque version publiée correspond à un tag `vX.Y.Z` et à une Release GitHub construite par la CI.
 
+## [0.1.3] - 2026-11-27
+
+### Ajouté
+- **Script d'installation `install.sh`**, livré à la racine de l'archive de release
+  (Debian/Proxmox avec systemd, Alpine avec OpenRC) :
+  - première installation : utilisateur, répertoires et droits, binaire, configuration avec
+    un jeton neuf (affiché une fois, avec la commande `claude mcp add`), sudoers validé par
+    `visudo -cf`, service, rotation des journaux ; le service n'est pas démarré et la liste de
+    ce qui reste à faire est affichée (certificat, liste blanche, démarrage) ;
+  - mise à jour : configuration existante vérifiée par la nouvelle version avant toute
+    modification ; binaire et service remplacés ; redémarrage si le service tournait ;
+    configuration et sudoers existants jamais modifiés (différence sudoers affichée) ;
+  - options `--host`, `--allow-ip`, `--client`, `--server-name`, `--pve-cert` (certificat
+    ACME de Proxmox), `--dry-run`, `--uninstall [--purge]`.
+- `packaging/mcp-shell.logrotate`.
+- CI : shellcheck, et test d'installation de bout en bout dans des conteneurs Debian 12 et
+  Alpine 3.20 (aussi exécuté avant chaque release).
+
 ## [0.1.2] - 2026-11-27
 
 ### Sécurité
@@ -45,6 +63,7 @@ Première version : serveur MCP HTTP streamable avec TLS (rechargement à chaud)
 timeout et sortie plafonnée, journal d'audit JSON lines, sous-commandes `serve`, `gen-token`,
 `check`, fichiers systemd/OpenRC/sudoers.
 
+[0.1.3]: https://github.com/openssas/mcp-shell/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/openssas/mcp-shell/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/openssas/mcp-shell/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/openssas/mcp-shell/releases/tag/v0.1.0
