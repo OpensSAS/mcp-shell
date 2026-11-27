@@ -1,11 +1,14 @@
 name: Release
 
-# Publier une version : mettre à jour version dans Cargo.toml et CHANGELOG.md,
-# fusionner dans main, puis :
-#   git tag v0.1.2 && git push origin v0.1.2
+# Publier une version (après avoir fusionné dans main le passage de version dans
+# Cargo.toml et la section datée du CHANGELOG.md) :
+#   - onglet Actions -> Release -> Run workflow (branche main) : le workflow crée
+#     lui-même le tag vX.Y.Z d'après Cargo.toml ;
+#   - ou, au choix, pousser le tag : git tag vX.Y.Z && git push origin vX.Y.Z
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write      # créer la Release
@@ -21,17 +24,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Le tag doit correspondre à Cargo.toml
+      - name: Déterminer le tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           v=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
-          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::tag $GITHUB_REF_NAME, mais Cargo.toml indique $v"
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            if [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "::error::à lancer depuis la branche main (lancé depuis $GITHUB_REF)"
+              exit 1
+            fi
+            tag="v$v"
+            if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+              echo "::error::le tag $tag existe déjà : passer d'abord version dans Cargo.toml"
+              exit 1
+            fi
+          else
+            tag=$GITHUB_REF_NAME
+            if [ "$tag" != "v$v" ]; then
+              echo "::error::tag $tag, mais Cargo.toml indique $v"
+              exit 1
+            fi
           fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "Version publiée : $tag (commit $GITHUB_SHA)"
 
       - name: Le CHANGELOG doit décrire la version
         run: |
-          v=${GITHUB_REF_NAME#v}
+          v=${TAG#v}
           awk -v v="$v" '
             $0 ~ "^## \\[" v "\\]" { on = 1; next }
             on && /^## \[/ { exit }
@@ -59,11 +79,11 @@ jobs:
         with:
           subject-path: dist/*.tar.gz
 
-      - name: Créer la Release
+      - name: Créer la Release (et le tag s'il n'existe pas encore)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "mcp-shell ${GITHUB_REF_NAME#v}" \
-            --notes-file notes.md \
-            --verify-tag
+          gh release create "$TAG" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "mcp-shell ${TAG#v}" \
+            --notes-file notes.md
