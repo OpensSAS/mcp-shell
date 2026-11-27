@@ -3,6 +3,13 @@
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [SemVer](https://semver.org/lang/fr/).
 Chaque version publiée correspond à un tag `vX.Y.Z` et à une Release GitHub construite par la CI.
 
+## [Non publié]
+
+### Modifié
+- Dépendances Rust : `toml` 1.2, `sha2` 0.11, `getrandom` 0.4, `clap` 4.6.9, `anyhow` 1.0.105
+  (aucun changement de comportement ; les options inconnues de la configuration restent refusées).
+- Actions GitHub : `checkout` v7, `upload-artifact` v7, `attest-build-provenance` v4.
+
 ## [0.1.3] - 2026-11-27
 
 ### Ajouté

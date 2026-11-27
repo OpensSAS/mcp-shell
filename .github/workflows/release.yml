@@ -22,7 +22,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Déterminer le tag
         env:
@@ -75,7 +75,7 @@ jobs:
           scripts/test-install.sh debian:12 dist/*.tar.gz
           scripts/test-install.sh alpine:3.20 dist/*.tar.gz
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/*.tar.gz
 
