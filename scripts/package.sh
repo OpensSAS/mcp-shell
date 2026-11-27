@@ -19,6 +19,7 @@ install -m 0755 "target/$TARGET/release/mcp-shell" "dist/$NAME/bin/mcp-shell"
 (cd "dist/$NAME/bin" && sha256sum mcp-shell > mcp-shell.sha256)
 cp -r packaging "dist/$NAME/packaging"
 cp README.md CHANGELOG.md LICENSE "dist/$NAME/"
+install -m 0755 scripts/install.sh "dist/$NAME/install.sh"
 
 # Archive reproductible : ordre, dates et propriétaires fixés.
 EPOCH=$(git log -1 --format=%ct 2>/dev/null || date +%s)

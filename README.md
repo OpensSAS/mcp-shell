@@ -61,19 +61,50 @@ Le découpage ignore les guillemets : il ne peut que rendre la vérification plu
 Les binaires sont publiés dans les [Releases GitHub](https://github.com/openssas/mcp-shell/releases), construits par la CI à partir du tag (binaire statique musl, Debian/Proxmox et Alpine).
 
 ```bash
-V=0.1.2
+V=0.1.3
 curl -fsSLO https://github.com/openssas/mcp-shell/releases/download/v$V/mcp-shell-$V-x86_64-linux.tar.gz
 curl -fsSLO https://github.com/openssas/mcp-shell/releases/download/v$V/mcp-shell-$V-x86_64-linux.tar.gz.sha256
 sha256sum -c mcp-shell-$V-x86_64-linux.tar.gz.sha256
 # Optionnel, depuis un poste avec gh : prouve que l'archive a été construite par la CI du dépôt
 gh attestation verify mcp-shell-$V-x86_64-linux.tar.gz -R openssas/mcp-shell
 tar xzf mcp-shell-$V-x86_64-linux.tar.gz && cd mcp-shell-$V
+```
+
+### Installation par script (recommandé)
+
+Depuis l'archive extraite, en root. Prérequis : `sudo` ≥ 1.9.10 et `bash` (Alpine : `apk add bash sudo`).
+
+```bash
+./install.sh --dry-run                       # voir ce qui serait fait
+./install.sh --host mcp-pve.exemple.fr --allow-ip 203.0.113.10/32
+```
+
+| Option | Rôle |
+|---|---|
+| `--host NOM` | nom DNS utilisé par le client (`allowed_hosts`) |
+| `--allow-ip CIDR` | réseau autorisé (répétable) |
+| `--client NOM` | nom du client du premier jeton (défaut `paperclip`) |
+| `--server-name NOM` | nom annoncé à l'agent (défaut : nom de la machine) |
+| `--pve-cert` | Proxmox : copie quotidienne du certificat ACME de pveproxy (§3) |
+| `--init systemd\|openrc\|none` | forcer le gestionnaire de services (détecté sinon) |
+| `--dry-run` | simulation, rien n'est modifié |
+| `--uninstall [--purge]` | désinstaller (`--purge` : aussi configuration, journaux, utilisateur) |
+
+**Première installation** : le script crée l'utilisateur `mcp-shell`, les répertoires et leurs droits, installe le binaire, génère la configuration **avec un jeton neuf** (affiché une seule fois, avec la commande `claude mcp add` à lancer côté client), installe sudoers après validation par `visudo -cf`, le service (systemd ou OpenRC) et la rotation des journaux. Il **ne démarre pas** le service : il affiche ce qui reste à faire (certificat TLS, relecture de la liste blanche, démarrage).
+
+**Mise à jour** : relancer `./install.sh` depuis la nouvelle archive. La nouvelle version vérifie d'abord la configuration existante (sinon arrêt, rien n'est modifié), remplace binaire et service, redémarre le service s'il tournait. La configuration et le sudoers existants ne sont **jamais** modifiés ; si le sudoers livré diffère, la différence est affichée.
+
+Le script est testé à chaque modification dans des conteneurs Debian 12 et Alpine 3.20 (installation, appels MCP réels via sudo, mise à jour, désinstallation).
+
+### Installation manuelle
+
+Détail de ce que fait le script, pour une installation à la main. Les commandes supposent le binaire copié dans `/tmp/mcp-shell` et les fichiers de `packaging/` dans le répertoire courant :
+
+```bash
 cp bin/mcp-shell /tmp/mcp-shell && cp packaging/* .
 ```
 
-Les commandes ci-dessous supposent le binaire copié dans `/tmp/mcp-shell` et les fichiers de `packaging/` dans le répertoire courant.
-
-### 2.1 Sur un hôte Proxmox (Debian, systemd)
+#### Sur un hôte Proxmox (Debian, systemd)
 
 ```bash
 # Utilisateur dédié, sans shell de connexion
@@ -100,7 +131,7 @@ systemctl daemon-reload
 
 Ne démarrez le service qu'après les étapes 3 (certificat) et 4 (jeton).
 
-### 2.2 Sur Alpine (OpenRC)
+#### Sur Alpine (OpenRC)
 
 ```bash
 apk add bash sudo
@@ -235,18 +266,7 @@ Niveau de détail : variable `RUST_LOG` (ex. `RUST_LOG=mcp_shell=debug`) dans le
 
 Le fichier est rouvert à chaque écriture : une rotation simple suffit.
 
-```
-/var/log/mcp-shell/audit.jsonl {
-    weekly
-    rotate 12
-    compress
-    missingok
-    notifempty
-    create 0640 mcp-shell mcp-shell
-}
-```
-
-À placer dans `/etc/logrotate.d/mcp-shell`.
+Fichier `packaging/mcp-shell.logrotate`, installé par `install.sh` dans `/etc/logrotate.d/mcp-shell` (rotation hebdomadaire, 12 semaines conservées, compression).
 
 ### Modifier la configuration
 
@@ -259,8 +279,10 @@ mcp-shell check -c /etc/mcp-shell/config.toml && systemctl restart mcp-shell
 Lisez d'abord le [CHANGELOG](CHANGELOG.md) : certaines versions demandent d'adapter la configuration ou le fichier sudoers.
 
 ```bash
-install -m 0755 /tmp/mcp-shell /usr/local/bin/mcp-shell && systemctl restart mcp-shell
+tar xzf mcp-shell-X.Y.Z-x86_64-linux.tar.gz && cd mcp-shell-X.Y.Z && ./install.sh
 ```
+
+À la main : `install -m 0755 /tmp/mcp-shell /usr/local/bin/mcp-shell && systemctl restart mcp-shell`.
 
 ## 8. Dépannage
 
@@ -287,7 +309,18 @@ Toolchain Rust ≥ 1.89 (champ `rust-version` de `Cargo.toml`, vérifié par la 
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked          # politique, exécution (timeout, arrière-plan…), jetons
+shellcheck -s sh scripts/*.sh
 ```
+
+### Tester le script d'installation
+
+```bash
+scripts/package.sh
+scripts/test-install.sh debian:12   dist/mcp-shell-*-x86_64-linux.tar.gz
+scripts/test-install.sh alpine:3.20 dist/mcp-shell-*-x86_64-linux.tar.gz
+```
+
+Docker requis. Dans un conteneur jetable : simulation, installation, serveur démarré avec un certificat auto-signé, appels MCP réels (dont une commande via `sudo` contre de faux `pct`/`qm`), relance sans écrasement, désinstallation, purge.
 
 ### Binaire de release en local
 

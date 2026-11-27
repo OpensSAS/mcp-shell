@@ -23,8 +23,12 @@ Langue du projet : **français** (code commenté, messages, logs, docs, commits)
 | `tools.rs` | Outils MCP (rmcp), journal d'audit de chaque appel |
 | `audit.rs` | Journal JSON lines |
 
-`packaging/` : configuration d'exemple, unités systemd/OpenRC, sudoers. Ils sont livrés dans
-l'archive de release : les garder cohérents avec le code.
+`packaging/` : configuration d'exemple, unités systemd/OpenRC, sudoers, logrotate. Ils sont
+livrés dans l'archive de release : les garder cohérents avec le code.
+
+`scripts/` : `package.sh` (archive de release), `install.sh` (installé à la racine de l'archive :
+installation, mise à jour, désinstallation ; POSIX sh, dash et busybox), `test-install.sh`
+(test de bout en bout d'`install.sh` dans Docker, Debian 12 et Alpine 3.20).
 
 ## Commandes
 
@@ -32,7 +36,9 @@ l'archive de release : les garder cohérents avec le code.
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
+shellcheck -s sh scripts/*.sh
 scripts/package.sh            # archive de release musl dans dist/ (musl-tools requis)
+scripts/test-install.sh alpine:3.20 dist/mcp-shell-*-x86_64-linux.tar.gz   # Docker requis
 ```
 
 Toujours `--locked` : `Cargo.lock` est versionné et fait foi. Version minimale de Rust :
@@ -53,6 +59,9 @@ Toujours `--locked` : `Cargo.lock` est versionné et fait foi. Version minimale 
   `exemple.fr`.
 - Toute modification visible va dans `CHANGELOG.md` (section de la prochaine version), en
   signalant ce qu'un administrateur doit reporter sur ses serveurs (config, sudoers).
+- `install.sh` ne doit jamais modifier une configuration ou un sudoers existants, ni démarrer
+  le service à la première installation. Toute modification se teste avec `test-install.sh`
+  sur les deux images.
 - Une branche et une PR par changement ; la CI doit être verte.
 
 ## Publier une version

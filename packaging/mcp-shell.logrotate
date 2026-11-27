@@ -1,0 +1,10 @@
+# /etc/logrotate.d/mcp-shell
+# Le journal d'audit est rouvert à chaque écriture : une rotation simple suffit.
+/var/log/mcp-shell/audit.jsonl /var/log/mcp-shell/service.log {
+    weekly
+    rotate 12
+    compress
+    missingok
+    notifempty
+    create 0640 mcp-shell mcp-shell
+}
