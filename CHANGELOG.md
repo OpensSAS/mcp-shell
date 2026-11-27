@@ -3,7 +3,7 @@
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions [SemVer](https://semver.org/lang/fr/).
 Chaque version publiée correspond à un tag `vX.Y.Z` et à une Release GitHub construite par la CI.
 
-## [0.1.2] - non publiée
+## [0.1.2] - 2026-11-27
 
 ### Sécurité
 - **Timeout contournable** : le timeout ne couvrait que l'attente du shell, pas la lecture
@@ -45,6 +45,6 @@ Première version : serveur MCP HTTP streamable avec TLS (rechargement à chaud)
 timeout et sortie plafonnée, journal d'audit JSON lines, sous-commandes `serve`, `gen-token`,
 `check`, fichiers systemd/OpenRC/sudoers.
 
-[0.1.2]: https://github.com/openssas/mcp-shell/compare/v0.1.1...HEAD
+[0.1.2]: https://github.com/openssas/mcp-shell/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/openssas/mcp-shell/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/openssas/mcp-shell/releases/tag/v0.1.0
