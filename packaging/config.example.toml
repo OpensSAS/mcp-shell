@@ -7,7 +7,7 @@ server_name = "pve-opens"                 # nom annoncé à l'agent
 allowed_hosts = ["mcp-pve.exemple.fr", "mcp-pve.exemple.fr:8443"]
 
 # IP autorisées. Vide = toutes. Ici : le VPS Paperclip + le LAN.
-allowed_ips = ["76.13.41.227/32", "192.168.1.0/24"]
+allowed_ips = ["203.0.113.10/32", "192.168.1.0/24"]
 
 audit_log = "/var/log/mcp-shell/audit.jsonl"
 

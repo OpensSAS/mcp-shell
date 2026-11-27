@@ -3,8 +3,15 @@
 
 use crate::config::ExecConfig;
 use serde::Serialize;
-use std::{path::Path, process::Stdio, time::{Duration, Instant}};
-use tokio::{io::{AsyncRead, AsyncReadExt}, process::Command};
+use std::{
+    path::Path,
+    process::Stdio,
+    time::{Duration, Instant},
+};
+use tokio::{
+    io::{AsyncRead, AsyncReadExt},
+    process::Command,
+};
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ExecOutput {
@@ -18,7 +25,12 @@ pub struct ExecOutput {
     pub duration_ms: u128,
 }
 
-pub async fn run(cfg: &ExecConfig, command: &str, workdir: &Path, timeout: Duration) -> std::io::Result<ExecOutput> {
+pub async fn run(
+    cfg: &ExecConfig,
+    command: &str,
+    workdir: &Path,
+    timeout: Duration,
+) -> std::io::Result<ExecOutput> {
     let start = Instant::now();
     let mut cmd = Command::new(&cfg.shell);
     cmd.arg("-c")
@@ -71,7 +83,9 @@ pub async fn run(cfg: &ExecConfig, command: &str, workdir: &Path, timeout: Durat
 
 /// Lit tout le flux (pour ne jamais bloquer le processus) mais ne garde que `limit` octets.
 async fn read_capped<R: AsyncRead + Unpin>(reader: Option<R>, limit: usize) -> (String, bool) {
-    let Some(mut reader) = reader else { return (String::new(), false) };
+    let Some(mut reader) = reader else {
+        return (String::new(), false);
+    };
     let mut kept = Vec::with_capacity(limit.min(8192));
     let mut buf = [0u8; 8192];
     let mut truncated = false;

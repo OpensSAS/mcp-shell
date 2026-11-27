@@ -1,9 +1,19 @@
 //! Outils MCP exposés : `run_command` et `get_policy`.
 
-use crate::{audit::{self, Audit, AuditEvent}, auth::Client, config::ExecConfig, exec, policy::Policy};
+use crate::{
+    audit::{self, Audit, AuditEvent},
+    auth::Client,
+    config::ExecConfig,
+    exec,
+    policy::Policy,
+};
 use axum::http::request::Parts;
 use rmcp::{
-    handler::server::{router::tool::ToolRouter, tool::Extension, wrapper::{Json, Parameters}},
+    handler::server::{
+        router::tool::ToolRouter,
+        tool::Extension,
+        wrapper::{Json, Parameters},
+    },
     model::{CallToolResult, Implementation, ServerCapabilities, ServerConfig},
     tool, tool_handler, tool_router, ErrorData, ServerHandler,
 };
@@ -53,7 +63,10 @@ pub struct PolicyInfo {
 
 impl ShellServer {
     pub fn new(shared: Arc<Shared>) -> Self {
-        Self { shared, tool_router: Self::tool_router() }
+        Self {
+            shared,
+            tool_router: Self::tool_router(),
+        }
     }
 }
 
@@ -69,7 +82,13 @@ fn client_of(parts: &Parts) -> (String, String) {
 impl ShellServer {
     #[tool(
         name = "run_command",
-        annotations(title = "Exécuter une commande", read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false),
+        annotations(
+            title = "Exécuter une commande",
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
         description = "Exécute une commande shell sur ce serveur et renvoie stdout, stderr et le code de retour. \
                        Seules les commandes de la liste blanche sont acceptées : appelez get_policy pour la connaître. \
                        Chaque segment séparé par | ; && || doit être autorisé ; $(...), backticks et redirections sont refusés."
@@ -81,7 +100,11 @@ impl ShellServer {
     ) -> Result<CallToolResult, ErrorData> {
         let s = &self.shared;
         let (client, ip) = client_of(&parts);
-        let workdir = p.workdir.as_deref().map(PathBuf::from).unwrap_or_else(|| s.exec.workdir.clone());
+        let workdir = p
+            .workdir
+            .as_deref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| s.exec.workdir.clone());
         let wd = workdir.display().to_string();
 
         let refusal = if !workdir.is_absolute() {
@@ -92,13 +115,23 @@ impl ShellServer {
         if let Some(reason) = refusal {
             s.audit
                 .write(AuditEvent {
-                    ts: audit::now(), client: &client, ip: &ip, tool: "run_command",
-                    command: Some(&p.command), workdir: Some(&wd), outcome: "denied",
-                    reason: Some(&reason), exit_code: None, timed_out: None, duration_ms: None,
+                    ts: audit::now(),
+                    client: &client,
+                    ip: &ip,
+                    tool: "run_command",
+                    command: Some(&p.command),
+                    workdir: Some(&wd),
+                    outcome: "denied",
+                    reason: Some(&reason),
+                    exit_code: None,
+                    timed_out: None,
+                    duration_ms: None,
                 })
                 .await;
             tracing::warn!(client = %client, command = %p.command, %reason, "commande refusée");
-            return Ok(CallToolResult::structured_error(json!({ "denied": true, "reason": reason })));
+            return Ok(CallToolResult::structured_error(
+                json!({ "denied": true, "reason": reason }),
+            ));
         }
 
         let timeout = p
@@ -110,23 +143,39 @@ impl ShellServer {
             Ok(out) => {
                 s.audit
                     .write(AuditEvent {
-                        ts: audit::now(), client: &client, ip: &ip, tool: "run_command",
-                        command: Some(&p.command), workdir: Some(&wd), outcome: "executed",
-                        reason: None, exit_code: out.exit_code, timed_out: Some(out.timed_out),
+                        ts: audit::now(),
+                        client: &client,
+                        ip: &ip,
+                        tool: "run_command",
+                        command: Some(&p.command),
+                        workdir: Some(&wd),
+                        outcome: "executed",
+                        reason: None,
+                        exit_code: out.exit_code,
+                        timed_out: Some(out.timed_out),
                         duration_ms: Some(out.duration_ms),
                     })
                     .await;
                 tracing::info!(client = %client, command = %p.command, exit = ?out.exit_code, "commande exécutée");
-                let value = serde_json::to_value(&out).map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+                let value = serde_json::to_value(&out)
+                    .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
                 Ok(CallToolResult::structured(value))
             }
             Err(e) => {
                 let reason = format!("lancement impossible : {e}");
                 s.audit
                     .write(AuditEvent {
-                        ts: audit::now(), client: &client, ip: &ip, tool: "run_command",
-                        command: Some(&p.command), workdir: Some(&wd), outcome: "error",
-                        reason: Some(&reason), exit_code: None, timed_out: None, duration_ms: None,
+                        ts: audit::now(),
+                        client: &client,
+                        ip: &ip,
+                        tool: "run_command",
+                        command: Some(&p.command),
+                        workdir: Some(&wd),
+                        outcome: "error",
+                        reason: Some(&reason),
+                        exit_code: None,
+                        timed_out: None,
+                        duration_ms: None,
                     })
                     .await;
                 Ok(CallToolResult::structured_error(json!({ "error": reason })))
@@ -136,7 +185,13 @@ impl ShellServer {
 
     #[tool(
         name = "get_policy",
-        annotations(title = "Politique d'exécution", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+        annotations(
+            title = "Politique d'exécution",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        ),
         description = "Renvoie le nom du serveur et la politique d'exécution : commandes autorisées (regex), \
                        motifs interdits, limites de temps et de taille de sortie. À appeler avant run_command."
     )]

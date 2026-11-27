@@ -28,7 +28,10 @@ impl Policy {
         let allow = cfg
             .allow
             .iter()
-            .map(|p| Regex::new(&format!("^(?:{p})$")).with_context(|| format!("regex allow invalide : {p}")))
+            .map(|p| {
+                Regex::new(&format!("^(?:{p})$"))
+                    .with_context(|| format!("regex allow invalide : {p}"))
+            })
             .collect::<Result<Vec<_>>>()?;
         let deny = cfg
             .deny
@@ -76,7 +79,9 @@ impl Policy {
                 continue;
             }
             if !self.allow.iter().any(|re| re.is_match(seg)) {
-                return Err(format!("segment non autorisé par la liste blanche : `{seg}`"));
+                return Err(format!(
+                    "segment non autorisé par la liste blanche : `{seg}`"
+                ));
             }
         }
         Ok(())

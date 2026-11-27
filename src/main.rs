@@ -15,7 +15,11 @@ use rmcp::transport::streamable_http_server::{
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 #[derive(Parser)]
-#[command(name = "mcp-shell", version, about = "Serveur MCP d'exécution shell sous liste blanche (HTTP streamable, TLS, jetons)")]
+#[command(
+    name = "mcp-shell",
+    version,
+    about = "Serveur MCP d'exécution shell sous liste blanche (HTTP streamable, TLS, jetons)"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -44,7 +48,8 @@ enum Cmd {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "mcp_shell=info,warn".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "mcp_shell=info,warn".into()),
         )
         .with_target(false)
         .init();
@@ -127,7 +132,13 @@ async fn serve(config_path: PathBuf) -> Result<()> {
             let _ = rustls::crypto::ring::default_provider().install_default();
             let rustls_cfg = RustlsConfig::from_pem_file(&tls.cert, &tls.key)
                 .await
-                .with_context(|| format!("chargement TLS ({} / {})", tls.cert.display(), tls.key.display()))?;
+                .with_context(|| {
+                    format!(
+                        "chargement TLS ({} / {})",
+                        tls.cert.display(),
+                        tls.key.display()
+                    )
+                })?;
             tokio::spawn(reload_tls(
                 rustls_cfg.clone(),
                 tls.cert.clone(),
@@ -135,11 +146,20 @@ async fn serve(config_path: PathBuf) -> Result<()> {
                 Duration::from_secs(tls.reload_interval_secs.max(60)),
             ));
             tracing::info!("écoute HTTPS sur {} (endpoint /mcp)", cfg.listen);
-            axum_server::bind_rustls(cfg.listen, rustls_cfg).handle(handle).serve(make).await?;
+            axum_server::bind_rustls(cfg.listen, rustls_cfg)
+                .handle(handle)
+                .serve(make)
+                .await?;
         }
         None => {
-            tracing::warn!("écoute en HTTP clair sur {} : à réserver à un reverse proxy local", cfg.listen);
-            axum_server::bind(cfg.listen).handle(handle).serve(make).await?;
+            tracing::warn!(
+                "écoute en HTTP clair sur {} : à réserver à un reverse proxy local",
+                cfg.listen
+            );
+            axum_server::bind(cfg.listen)
+                .handle(handle)
+                .serve(make)
+                .await?;
         }
     }
     Ok(())

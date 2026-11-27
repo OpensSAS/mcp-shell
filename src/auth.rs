@@ -25,7 +25,10 @@ pub struct AuthState {
 }
 
 impl AuthState {
-    pub fn new(tokens: &[crate::config::TokenConfig], allowed_ips: Vec<IpNet>) -> anyhow::Result<Self> {
+    pub fn new(
+        tokens: &[crate::config::TokenConfig],
+        allowed_ips: Vec<IpNet>,
+    ) -> anyhow::Result<Self> {
         let tokens = tokens
             .iter()
             .map(|t| {
@@ -34,7 +37,10 @@ impl AuthState {
                 Ok((t.name.clone(), h))
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
-        Ok(Self { tokens, allowed_ips })
+        Ok(Self {
+            tokens,
+            allowed_ips,
+        })
     }
 
     fn identify(&self, presented: &str) -> Option<&str> {
@@ -81,7 +87,10 @@ pub async fn middleware(
             .into_response();
     };
 
-    req.extensions_mut().insert(Client { name: name.to_string(), ip: ip.to_string() });
+    req.extensions_mut().insert(Client {
+        name: name.to_string(),
+        ip: ip.to_string(),
+    });
     next.run(req).await
 }
 
